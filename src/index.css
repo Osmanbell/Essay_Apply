@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #10b981; /* Emerald 500 */
+  --color-primary-dark: #059669; /* Emerald 600 */
+  --color-primary-light: #d1fae5; /* Emerald 100 */
+  --color-secondary: #ffffff;
+  --color-accent: #34d399; /* Emerald 400 */
+}
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900;
+  }
+}

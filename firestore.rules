@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - email: string (required) - User's email
+    //   - displayName: string (optional) - User's display name
+    //   - photoURL: string (optional) - User's photo URL
+    //   - subscription: string (required) - 'free' or 'premium'
+    //   - cvProfile: map (optional) - Structured CV data
+    //   - createdAt: timestamp (required) - Creation time
+    //   - updatedAt: timestamp (required) - Last update time
+    //
+    // Collection: jobs
+    // Document ID: jobId
+    // Fields:
+    //   - jobId: string (required)
+    //   - title: string (required)
+    //   - company: string (required)
+    //   - location: string (required)
+    //   - description: string (required)
+    //   - skills: list (required)
+    //   - salary: map (required)
+    //   - source: string (required)
+    //   - url: string (required)
+    //   - postedAt: timestamp (required)
+    //   - detectedAt: timestamp (required)
+    //
+    // Collection: users/{userId}/applications
+    // Document ID: appId
+    // Fields:
+    //   - userId: string (required)
+    //   - jobId: string (required)
+    //   - status: string (required) - 'applied', 'saved', 'interviewing', 'rejected'
+    //   - matchScore: number (required)
+    //   - appliedAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscription == 'admin' || 
+         (request.auth.token.email == "husmanbell@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= minLen && 
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'subscription', 'createdAt', 'updatedAt']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.subscription in ['free', 'premium', 'admin'] &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidApplication(data, userId) {
+      return hasRequiredFields(['userId', 'jobId', 'jobTitle', 'company', 'status', 'matchScore', 'appliedAt']) &&
+             data.userId == userId &&
+             data.status in ['applied', 'saved', 'interviewing', 'rejected'] &&
+             data.matchScore is number &&
+             data.matchScore >= 0 && data.matchScore <= 100 &&
+             data.appliedAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /invitations/{invitationId} {
+      // Only admins can create and manage invitations
+      allow read, write: if isAdmin();
+    }
+
+    match /companies/{domain} {
+      // Company info is readable by all authenticated users
+      allow read: if isAuthenticated();
+      // Any authenticated user can cache company info if it doesn't exist
+      allow create: if isAuthenticated() && hasRequiredFields(['name']);
+      // Only admins can update company info
+      allow update: if isAdmin();
+    }
+
+    match /users/{userId} {
+      // Users can list the collection if they are admin
+      allow list: if isAdmin();
+      // Users can only read their own profile (PII protection)
+      allow get: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile with 'free' subscription by default
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) && 
+                      (request.resource.data.subscription == 'free' || isAdmin());
+      
+      // Users can update their own profile but NOT their subscription status (unless admin)
+      allow update: if isOwner(userId) && 
+                      isValidUser(request.resource.data) && 
+                      (request.resource.data.subscription == resource.data.subscription || isAdmin());
+
+      match /applications/{appId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidApplication(request.resource.data, userId);
+        allow update: if isOwner(userId) && isValidApplication(request.resource.data, userId);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Collection Group rule for Admin Dashboard
+    match /{path=**}/applications/{appId} {
+      allow read: if isAdmin();
+    }
+
+    match /jobs/{jobId} {
+      // Jobs are readable by all authenticated users
+      allow read: if isAuthenticated();
+      
+      // Only admins can manage job listings
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile, subscription status, and CV data.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "subscription": { 
+          "type": "string", 
+          "enum": ["free", "premium", "admin"],
+          "description": "User's subscription level"
+        },
+        "cvProfile": { "type": "object", "description": "Structured CV data" },
+        "cvAnalyses": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" },
+              "originalText": { "type": "string" },
+              "analysis": { "type": "object" }
+            }
+          }
+        },
+        "savedJobs": { "type": "array", "items": { "type": "string" }, "description": "List of job IDs" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "subscription"]
+    },
+    "JobListing": {
+      "title": "Job Listing",
+      "description": "Stores job opportunities aggregated from various sources.",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string" },
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "salary": { "type": "object" },
+        "source": { "type": "string" },
+        "url": { "type": "string" },
+        "postedAt": { "type": "string", "format": "date-time" },
+        "detectedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jobId", "title", "company", "url"]
+    },
+    "Application": {
+      "title": "Job Application",
+      "description": "Tracks a user's application to a specific job.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string", "enum": ["applied", "saved", "interviewing", "rejected"] },
+        "matchScore": { "type": "number" },
+        "appliedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "jobId", "status"]
+    },
+    "CompanyInfo": {
+      "title": "Company Information",
+      "description": "Cached company data from external APIs.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "domain": { "type": "string" },
+        "size": { "type": "string" },
+        "industry": { "type": "string" },
+        "funding": { "type": "string" },
+        "description": { "type": "string" },
+        "logo": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and settings"
+    },
+    "/jobs/{jobId}": {
+      "schema": "JobListing",
+      "description": "Global job listings"
+    },
+    "/users/{userId}/applications/{appId}": {
+      "schema": "Application",
+      "description": "User's job applications"
+    },
+    "/companies/{domain}": {
+      "schema": "CompanyInfo",
+      "description": "Cached company information"
+    }
+  }
+}
